@@ -1,169 +1,93 @@
 package biz.digitalindustry.groovyforth
 
 class Forth {
-    List<Integer> stack = []
+    protected List<Integer> stack = []
     Map<String, WordEntry> dictionary = [:]
-
-    class WordEntry {
-        int address
-        Closure behavior = null
-    }
+    Map<Integer, Integer> memory = [:]
+    int here = 0
 
     boolean defining = false
     String currentWord = null
     List<String> currentDefinition = []
-    Map<Integer, Integer> memory = [:]  // sparse memory
-    int here = 0                        // dictionary pointer, like DP in Jones FORTH
+    List<String> tokenStream = []
+    int tokenIndex = 0
 
+    class WordEntry {
+        int address = 0
+        Closure behavior = null
+    }
 
     Forth() {
-        // Core primitives
-        addWordEntry('.' , { println(stack.pop()) })
-        dictionary['DUP'] = { def a = stack.peek(); stack << a }
-        dictionary['DROP'] = { stack.pop() }
-        dictionary['SWAP'] = { def b = stack.pop(); def a = stack.pop(); stack << b; stack << a }
-        dictionary['OVER'] = { def b = stack[-2]; stack << b }
-        dictionary['+'] = {
-            def b = stack.pop();
-            def a = stack.pop();
-            stack << (a + b)
-        }
-        dictionary['-'] = { def b = stack.pop(); def a = stack.pop(); stack << (a - b) }
-        dictionary['*'] = { def b = stack.pop(); def a = stack.pop(); stack << (a * b) }
-        dictionary['/'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a.intdiv(b))  // safe integer division
-        }
-        dictionary['MOD'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a % b)
-        }
-        dictionary['='] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a == b ? -1 : 0)  // FORTH truth: -1 is true, 0 is false
-        }
-        dictionary['<'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a < b ? -1 : 0)
-        }
-        dictionary['>'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a > b ? -1 : 0)
-        }
-        dictionary['EMIT'] = {
-            def code = stack.pop()
-            print((char) code)
-        }
-        dictionary['CR'] = {
-            println ""
-        }
-        dictionary['/MOD'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a % b)
-            stack << (a.intdiv(b))
-        }
-        dictionary['1+'] = {
-            def a = stack.pop()
-            stack << (a + 1)
-        }
-        dictionary['1-'] = {
-            def a = stack.pop()
-            stack << (a - 1)
-        }
-        dictionary['2+'] = {
-            def a = stack.pop()
-            stack << (a + 2)
-        }
-        dictionary['2-'] = {
-            def a = stack.pop()
-            stack << (a - 2)
-        }
-        dictionary['='] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a == b ? -1 : 0)
-        }
-        dictionary['<'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a < b ? -1 : 0)
-        }
-        dictionary['>'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a > b ? -1 : 0)
-        }
-        dictionary['0='] = {
-            def a = stack.pop()
-            stack << (a == 0 ? -1 : 0)
-        }
-        dictionary['0<'] = {
-            def a = stack.pop()
-            stack << (a < 0 ? -1 : 0)
-        }
-        dictionary['0>'] = {
-            def a = stack.pop()
-            stack << (a > 0 ? -1 : 0)
-        }
-        dictionary['AND'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a & b)
-        }
-        dictionary['OR'] = {
-            def b = stack.pop()
-            def a = stack.pop()
-            stack << (a | b)
-        }
-        dictionary['INVERT'] = {
-            def a = stack.pop()
-            stack << (~a)
-        }
-        dictionary['ROT'] = {
+        addWordEntry('.', { println(stack.pop()) })
+        addWordEntry('DUP', { def a = stack.peek(); stack << a })
+        addWordEntry('DROP', { stack.pop() })
+        addWordEntry('SWAP', { def b = stack.pop(); def a = stack.pop(); stack << b; stack << a })
+        addWordEntry('OVER', { def b = stack[-2]; stack << b })
+        addWordEntry('+', { def b = stack.pop(); def a = stack.pop(); stack << (a + b) })
+        addWordEntry('-', { def b = stack.pop(); def a = stack.pop(); stack << (b - a) })
+        addWordEntry('*', { def b = stack.pop(); def a = stack.pop(); stack << (a * b) })
+        addWordEntry('/', { def b = stack.pop(); def a = stack.pop(); stack << (b.intdiv(a)) })
+        addWordEntry('MOD', { def b = stack.pop(); def a = stack.pop(); stack << (b % a) })
+        addWordEntry('=', { def b = stack.pop(); def a = stack.pop(); stack << (a == b ? -1 : 0) })
+        addWordEntry('<', { def b = stack.pop(); def a = stack.pop(); stack << (a < b ? -1 : 0) })
+        addWordEntry('>', { def b = stack.pop(); def a = stack.pop(); stack << (a > b ? -1 : 0) })
+        addWordEntry('EMIT', { def code = stack.pop(); print((char) code) })
+        addWordEntry('CR', { println "" })
+        addWordEntry('/MOD', {
+            def rhs = stack.pop()
+            def lhs = stack.pop()
+            stack << (lhs % rhs)
+            stack << (lhs.intdiv(rhs))
+        })
+        addWordEntry('1+', { def a = stack.pop(); stack << (a + 1) })
+        addWordEntry('1-', { def a = stack.pop(); stack << (a - 1) })
+        addWordEntry('2+', { def a = stack.pop(); stack << (a + 2) })
+        addWordEntry('2-', { def a = stack.pop(); stack << (a - 2) })
+        addWordEntry('0=', { def a = stack.pop(); stack << (a == 0 ? -1 : 0) })
+        addWordEntry('0<', { def a = stack.pop(); stack << (a < 0 ? -1 : 0) })
+        addWordEntry('0>', { def a = stack.pop(); stack << (a > 0 ? -1 : 0) })
+        addWordEntry('AND', { def b = stack.pop(); def a = stack.pop(); stack << (a & b) })
+        addWordEntry('OR', { def b = stack.pop(); def a = stack.pop(); stack << (a | b) })
+        addWordEntry('INVERT', { def a = stack.pop(); stack << (~a) })
+        addWordEntry('ROT', {
             def c = stack.pop()
             def b = stack.pop()
             def a = stack.pop()
             stack << b
             stack << c
             stack << a
-        }
-        dictionary['-ROT'] = {
+        })
+        addWordEntry('-ROT', {
             def c = stack.pop()
             def b = stack.pop()
             def a = stack.pop()
             stack << c
             stack << a
             stack << b
-        }
-        dictionary['NIP'] = {
+        })
+        addWordEntry('NIP', {
             def b = stack.pop()
             stack.pop()
             stack << b
-        }
-        dictionary['TUCK'] = {
+        })
+        addWordEntry('TUCK', {
             def b = stack.pop()
             def a = stack.pop()
             stack << b
             stack << a
             stack << b
-        }
-        dictionary['2DUP'] = {
+        })
+        addWordEntry('2DUP', {
             def b = stack[-1]
             def a = stack[-2]
             stack << a
             stack << b
-        }
-        dictionary['2DROP'] = {
+        })
+        addWordEntry('2DROP', {
             stack.pop()
             stack.pop()
-        }
-        dictionary['2SWAP'] = {
+        })
+        addWordEntry('2SWAP', {
             def d = stack.pop()
             def c = stack.pop()
             def b = stack.pop()
@@ -172,71 +96,87 @@ class Forth {
             stack << d
             stack << a
             stack << b
-        }
-        dictionary['@'] = {
+        })
+        addWordEntry('@', {
             def addr = stack.pop()
             stack << (memory[addr] ?: 0)
-        }
-        dictionary['!'] = {
+        })
+        addWordEntry('!', {
             def value = stack.pop()
             def addr = stack.pop()
             memory[addr] = value
-        }
-        dictionary['HERE'] = {
-            stack << here
-        }
-        dictionary['ALLOT'] = {
+        })
+        addWordEntry('HERE', { stack << here })
+        addWordEntry('ALLOT', {
             def n = stack.pop()
             here += n
-        }
-        dictionary[','] = {
+        })
+        addWordEntry(',', {
             def value = stack.pop()
             memory[here] = value
             here += 1
-        }
-        dictionary['CELL+'] = {
+        })
+        addWordEntry('CELL+', {
             def addr = stack.pop()
             stack << (addr + 1)
-        }
-        dictionary['CELLS'] = {
+        })
+        addWordEntry('CELLS', {
             def n = stack.pop()
-            stack << n  // No-op for us; each cell is already size 1
-        }
-        dictionary['DUMP'] = {
+            stack << n
+        })
+        addWordEntry('DUMP', {
             println "Memory (up to HERE = $here):"
             (0..<here).each { addr ->
                 if (memory.containsKey(addr)) {
                     println "$addr: ${memory[addr]}"
                 }
             }
-        }
-        dictionary['CREATE'] = {
-            def name = nextToken() // you’ll need a simple token stream (see below)
-            dictionary[name.toUpperCase()] = new WordEntry(address: here)
-            here += 1  // reserve one cell
-        }
-        dictionary['DOES>'] = {
-            // Capture tokens after DOES> and build a closure
+        })
+        addWordEntry('CREATE', {
+            def name = nextToken()
+            def addr = here
+            dictionary[name.toUpperCase()] = new WordEntry(
+                    address: addr,
+                    behavior: { stack << addr }
+            )
+        })
+        addWordEntry('DOES>', {
             def behaviorTokens = remainingTokens()
             def lastWord = dictionary.keySet().last()
             def wordEntry = dictionary[lastWord]
             wordEntry.behavior = {
                 behaviorTokens.each { token -> eval(token) }
             }
-        }
+        })
+        addWordEntry(':', {
+            throw new RuntimeException("':' should be handled in eval directly")
+        })
+        addWordEntry(';', {
+            throw new RuntimeException("';' should be handled in eval directly")
+        })
+        addWordEntry("\'", {
+            def name = nextToken().toUpperCase()
+            if (!dictionary.containsKey(name)) {
+                throw new RuntimeException("Undefined word: $name")
+            }
+            def entry = dictionary[name]
+            stack << entry.behavior
+        })
+        addWordEntry('EXECUTE', {
+            def behavior = stack.pop()
+            if (behavior instanceof Closure) {
+                behavior.call()
+            } else {
+                throw new RuntimeException("EXECUTE expected a Closure on the stack")
+            }
+        })
 
 
-        // Reserved words for defining new words
-        dictionary[':'] = { throw new RuntimeException("':' should be handled in eval directly") }
-        dictionary[';'] = { throw new RuntimeException("';' should be handled in eval directly") }
     }
 
     private void addWordEntry(String name, Closure behavior) {
         dictionary[name.toUpperCase()] = new WordEntry(behavior: behavior)
     }
-
-    List<String> tokenStream = []
-    int tokenIndex = 0
 
     String nextToken() {
         if (tokenIndex < tokenStream.size()) return tokenStream[tokenIndex++]
@@ -249,16 +189,14 @@ class Forth {
         return remaining
     }
 
-    public List<Integer> evalAndPop(String input, int n) {
+    List<Integer> evalAndPop(String input, int n) {
         eval(input)
         def results = []
-        n.times {
-            results << stack.pop()
-        }
-        return results.reverse() // maintain left-to-right output
+        n.times { results << stack.pop() }
+        return results.reverse()
     }
 
-    public void eval(String input) {
+    void eval(String input) {
         tokenStream = input.split(/\s+/).findAll()
         tokenIndex = 0
 
@@ -290,7 +228,7 @@ class Forth {
             } else if (dictionary.containsKey(upper)) {
                 def entry = dictionary[upper]
                 if (entry.behavior != null) {
-                    entry.behavior()
+                    entry.behavior.call()
                 } else {
                     stack << entry.address
                 }
