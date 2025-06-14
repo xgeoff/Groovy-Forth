@@ -6,7 +6,7 @@ class Forth {
 
     class WordEntry {
         int address
-        Closure? behavior
+        Closure behavior = null
     }
 
     boolean defining = false
@@ -18,12 +18,16 @@ class Forth {
 
     Forth() {
         // Core primitives
-        dictionary['.'] = { println(stack.pop()) }
+        addWordEntry('.' , { println(stack.pop()) })
         dictionary['DUP'] = { def a = stack.peek(); stack << a }
         dictionary['DROP'] = { stack.pop() }
         dictionary['SWAP'] = { def b = stack.pop(); def a = stack.pop(); stack << b; stack << a }
         dictionary['OVER'] = { def b = stack[-2]; stack << b }
-        dictionary['+'] = { def b = stack.pop(); def a = stack.pop(); stack << (a + b) }
+        dictionary['+'] = {
+            def b = stack.pop();
+            def a = stack.pop();
+            stack << (a + b)
+        }
         dictionary['-'] = { def b = stack.pop(); def a = stack.pop(); stack << (a - b) }
         dictionary['*'] = { def b = stack.pop(); def a = stack.pop(); stack << (a * b) }
         dictionary['/'] = {
@@ -155,12 +159,6 @@ class Forth {
             stack << a
             stack << b
         }
-        dictionary['2DUP'] = {
-            def b = stack[-1]
-            def a = stack[-2]
-            stack << a
-            stack << b
-        }
         dictionary['2DROP'] = {
             stack.pop()
             stack.pop()
@@ -233,31 +231,69 @@ class Forth {
         dictionary[';'] = { throw new RuntimeException("';' should be handled in eval directly") }
     }
 
-    void eval(String input) {
-        input.split(/\s+/).each { token ->
+    private void addWordEntry(String name, Closure behavior) {
+        dictionary[name.toUpperCase()] = new WordEntry(behavior: behavior)
+    }
+
+    List<String> tokenStream = []
+    int tokenIndex = 0
+
+    String nextToken() {
+        if (tokenIndex < tokenStream.size()) return tokenStream[tokenIndex++]
+        else throw new RuntimeException("Unexpected end of input")
+    }
+
+    List<String> remainingTokens() {
+        def remaining = tokenStream.subList(tokenIndex, tokenStream.size())
+        tokenIndex = tokenStream.size()
+        return remaining
+    }
+
+    public List<Integer> evalAndPop(String input, int n) {
+        eval(input)
+        def results = []
+        n.times {
+            results << stack.pop()
+        }
+        return results.reverse() // maintain left-to-right output
+    }
+
+    public void eval(String input) {
+        tokenStream = input.split(/\s+/).findAll()
+        tokenIndex = 0
+
+        while (tokenIndex < tokenStream.size()) {
+            def token = nextToken()
+            def upper = token.toUpperCase()
+
             if (defining) {
                 if (token == ';') {
-                    // End definition
                     def body = currentDefinition.collect()
-                    dictionary[currentWord.toUpperCase()] = {
-                        body.each { word -> this.eval(word) }
-                    }
+                    dictionary[currentWord.toUpperCase()] = new WordEntry(
+                            address: here,
+                            behavior: {
+                                body.each { word -> eval(word) }
+                            }
+                    )
                     defining = false
                     currentWord = null
                     currentDefinition.clear()
                 } else if (currentWord == null) {
-                    // First word after ':' is the name
                     currentWord = token
                 } else {
-                    // Body of the definition
                     currentDefinition << token
                 }
             } else if (token == ':') {
                 defining = true
             } else if (token.isInteger()) {
                 stack << token.toInteger()
-            } else if (dictionary.containsKey(token.toUpperCase())) {
-                dictionary[token.toUpperCase()]()
+            } else if (dictionary.containsKey(upper)) {
+                def entry = dictionary[upper]
+                if (entry.behavior != null) {
+                    entry.behavior()
+                } else {
+                    stack << entry.address
+                }
             } else {
                 throw new RuntimeException("Unknown word: $token")
             }
