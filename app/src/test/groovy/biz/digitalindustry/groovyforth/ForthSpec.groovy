@@ -43,4 +43,15 @@ class ForthSpec extends Specification {
         then:
         result == [16]
     }
+
+    def "2DUP duplicates the top two stack values"() {
+        given:
+        def forth = new Forth()
+
+        when:
+        def result = forth.evalAndPop("10 20 2DUP", 4)
+
+        then:
+        result == [10, 20, 10, 20]
+    }
 }

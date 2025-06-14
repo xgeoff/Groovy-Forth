@@ -1,7 +1,7 @@
 package biz.digitalindustry.groovyforth
 
 class Forth {
-    protected List<Integer> stack = []
+    protected List<Integer> stack = new Stack()
     Map<String, WordEntry> dictionary = [:]
     Map<Integer, Integer> memory = [:]
     int here = 0
@@ -24,10 +24,10 @@ class Forth {
         addWordEntry('SWAP', { def b = stack.pop(); def a = stack.pop(); stack << b; stack << a })
         addWordEntry('OVER', { def b = stack[-2]; stack << b })
         addWordEntry('+', { def b = stack.pop(); def a = stack.pop(); stack << (a + b) })
-        addWordEntry('-', { def b = stack.pop(); def a = stack.pop(); stack << (b - a) })
+        addWordEntry('-', { def b = stack.pop(); def a = stack.pop(); stack << (a - b) })
         addWordEntry('*', { def b = stack.pop(); def a = stack.pop(); stack << (a * b) })
-        addWordEntry('/', { def b = stack.pop(); def a = stack.pop(); stack << (b.intdiv(a)) })
-        addWordEntry('MOD', { def b = stack.pop(); def a = stack.pop(); stack << (b % a) })
+        addWordEntry('/', { def b = stack.pop(); def a = stack.pop(); stack << (a.intdiv(b)) })
+        addWordEntry('MOD', { def b = stack.pop(); def a = stack.pop(); stack << (a % b) })
         addWordEntry('=', { def b = stack.pop(); def a = stack.pop(); stack << (a == b ? -1 : 0) })
         addWordEntry('<', { def b = stack.pop(); def a = stack.pop(); stack << (a < b ? -1 : 0) })
         addWordEntry('>', { def b = stack.pop(); def a = stack.pop(); stack << (a > b ? -1 : 0) })
@@ -102,8 +102,8 @@ class Forth {
             stack << (memory[addr] ?: 0)
         })
         addWordEntry('!', {
-            def value = stack.pop()
             def addr = stack.pop()
+            def value = stack.pop()
             memory[addr] = value
         })
         addWordEntry('HERE', { stack << here })
@@ -170,7 +170,17 @@ class Forth {
                 throw new RuntimeException("EXECUTE expected a Closure on the stack")
             }
         })
-
+        addWordEntry('?BRANCH', {
+            def jumpTo = currentExecutionTokens[++executionIndex]
+            def flag = stack.pop()
+            if (flag == 0) {
+                executionIndex = jumpTo.toInteger() - 1 // -1 to counter ++ later
+            }
+        })
+        addWordEntry('BRANCH', {
+            def jumpTo = currentExecutionTokens[++executionIndex]
+            executionIndex = jumpTo.toInteger() - 1
+        })
 
     }
 
