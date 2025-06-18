@@ -6,7 +6,7 @@ class ForthTickExecuteSpec extends Specification {
 
     def "tick pushes the behavior of a word and execute runs it"() {
         given:
-        def forth = new Forth()
+        def forth = new OldForth()
 
         when: "We define a word and use ' to get its execution token"
         forth.eval(": SQUARE DUP * ;")
@@ -18,7 +18,7 @@ class ForthTickExecuteSpec extends Specification {
 
     def "tick fails if the word is undefined"() {
         given:
-        def forth = new Forth()
+        def forth = new OldForth()
 
         when:
         forth.eval("' UNDEFINEDWORD")
@@ -30,7 +30,7 @@ class ForthTickExecuteSpec extends Specification {
 
     def "execute fails if top of stack is not a closure"() {
         given:
-        def forth = new Forth()
+        def forth = new OldForth()
 
         when:
         forth.eval("42 EXECUTE")

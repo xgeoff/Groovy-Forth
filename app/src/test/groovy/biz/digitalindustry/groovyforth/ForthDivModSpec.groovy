@@ -6,7 +6,7 @@ class ForthDivModSpec extends Specification {
 
     def "slash MOD pushes remainder then quotient"() {
         given:
-        def forth = new Forth()
+        def forth = new TestForth()
 
         when:
         def result = forth.evalAndPop("13 5 /MOD", 2)
@@ -17,7 +17,7 @@ class ForthDivModSpec extends Specification {
 
     def "slash MOD handles exact division"() {
         given:
-        def forth = new Forth()
+        def forth = new TestForth()
 
         when:
         def result = forth.evalAndPop("12 4 /MOD", 2)
@@ -28,7 +28,7 @@ class ForthDivModSpec extends Specification {
 
     def "slash MOD handles remainder larger than zero"() {
         given:
-        def forth = new Forth()
+        def forth = new TestForth()
 
         when:
         def result = forth.evalAndPop("20 6 /MOD", 2)

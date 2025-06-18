@@ -1,0 +1,159 @@
+package biz.digitalindustry.groovyforth
+
+class Forth {
+    List<Integer> stack = []
+    Map<String, WordEntry> dictionary = [:]
+
+    class WordEntry {
+        int address
+        Closure behavior = null
+    }
+
+    boolean defining = false
+    String currentWord = null
+    List<Object> currentDefinition = []
+    Map<Integer, Integer> memory = [:]
+    int here = 0
+
+    List<Object> currentExecutionTokens = []
+    int executionIndex = 0
+
+    Forth() {
+        // Arithmetic and logic
+        addWordEntry("+", { stack << (stack.pop() + stack.pop()) })
+        addWordEntry("-", { def b = stack.pop(); def a = stack.pop(); stack << (a - b) })
+        addWordEntry("*", { stack << (stack.pop() * stack.pop()) })
+        addWordEntry("/", { def b = stack.pop(); def a = stack.pop(); stack << (a.intdiv(b)) })
+        addWordEntry("MOD", { def b = stack.pop(); def a = stack.pop(); stack << (a % b) })
+
+        // Stack manipulation
+        addWordEntry("DUP", { stack << stack.last() })
+        addWordEntry("DROP", { stack.pop() })
+        addWordEntry("SWAP", { def b = stack.pop(); def a = stack.pop(); stack << b; stack << a })
+        addWordEntry("OVER", { stack << stack[-2] })
+        addWordEntry("2DUP", { def b = stack[-1]; def a = stack[-2]; stack << a; stack << b })
+
+        // Memory access
+        addWordEntry("@", { def addr = stack.pop(); stack << (memory[addr] ?: 0) })
+        addWordEntry("!", { def value = stack.pop(); def addr = stack.pop(); memory[addr] = value })
+        addWordEntry(",", { def value = stack.pop(); memory[here++] = value })
+        addWordEntry("HERE", { stack << here })
+        addWordEntry("ALLOT", { def n = stack.pop(); here += n })
+
+        // Control flow execution words
+        addWordEntry("?BRANCH", {
+            def jumpTo = currentExecutionTokens[++executionIndex]
+            def flag = stack.pop()
+            if (flag == 0) executionIndex = jumpTo.toInteger() - 1
+        })
+        addWordEntry("BRANCH", {
+            def jumpTo = currentExecutionTokens[++executionIndex]
+            executionIndex = jumpTo.toInteger() - 1
+        })
+
+        // Placeholder for CREATE/DOES>
+        addWordEntry("CREATE", {
+            def name = nextToken().toUpperCase()
+            dictionary[name] = new WordEntry(address: here)
+            here += 1
+        })
+
+        addWordEntry("DOES>", {
+            def behaviorTokens = remainingTokens()
+            def lastWord = dictionary.keySet().last()
+            def wordEntry = dictionary[lastWord]
+            wordEntry.behavior = {
+                behaviorTokens.each { token -> eval(token) }
+            }
+        })
+
+        // Special marker words
+        dictionary[":"] = new WordEntry(behavior: { throw new RuntimeException(": should be handled in eval") })
+        dictionary[";"] = new WordEntry(behavior: { throw new RuntimeException("; should be handled in eval") })
+    }
+
+    private void addWordEntry(String name, Closure behavior) {
+        dictionary[name.toUpperCase()] = new WordEntry(behavior: behavior)
+    }
+
+    List<String> tokenStream = []
+    int tokenIndex = 0
+
+    String nextToken() {
+        if (tokenIndex < tokenStream.size()) return tokenStream[tokenIndex++]
+        else throw new RuntimeException("Unexpected end of input")
+    }
+
+    List<String> remainingTokens() {
+        def remaining = tokenStream.subList(tokenIndex, tokenStream.size())
+        tokenIndex = tokenStream.size()
+        return remaining
+    }
+
+    public List<Integer> evalAndPop(String input, int n) {
+        eval(input)
+        def results = []
+        n.times {
+            results << stack.pop()
+        }
+        return results.reverse()
+    }
+
+    public void eval(String input) {
+        tokenStream = input.split(/\s+/).findAll()
+        tokenIndex = 0
+
+        while (tokenIndex < tokenStream.size()) {
+            def token = nextToken()
+            def upper = token.toUpperCase()
+
+            if (defining) {
+                if (token == ';') {
+                    def body = currentDefinition.collect()
+                    dictionary[currentWord.toUpperCase()] = new WordEntry(
+                        behavior: {
+                            executionIndex = 0
+                            currentExecutionTokens = body
+                            while (executionIndex < currentExecutionTokens.size()) {
+                                def instr = currentExecutionTokens[executionIndex++]
+                                def instrStr = instr.toString().toUpperCase()
+                                if (dictionary.containsKey(instrStr)) {
+                                    def entry = dictionary[instrStr]
+                                    if (entry.behavior != null) {
+                                        entry.behavior()
+                                    } else {
+                                        stack << entry.address
+                                    }
+                                } else if (instr.toString().isInteger()) {
+                                    stack << instr.toInteger()
+                                } else {
+                                    throw new RuntimeException("Unknown word: $instr")
+                                }
+                            }
+                        }
+                    )
+                    defining = false
+                    currentWord = null
+                    currentDefinition.clear()
+                } else if (currentWord == null) {
+                    currentWord = token
+                } else {
+                    currentDefinition << token
+                }
+            } else if (token == ':') {
+                defining = true
+            } else if (token.isInteger()) {
+                stack << token.toInteger()
+            } else if (dictionary.containsKey(upper)) {
+                def entry = dictionary[upper]
+                if (entry.behavior != null) {
+                    entry.behavior()
+                } else {
+                    stack << entry.address
+                }
+            } else {
+                throw new RuntimeException("Unknown word: $token")
+            }
+        }
+    }
+}

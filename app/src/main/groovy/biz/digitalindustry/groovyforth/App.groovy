@@ -9,7 +9,7 @@ class App {
             return
         }
 
-        def forth = new Forth()
+        def forth = new OldForth()
 
         if (args[0] == "-e" && args.length >= 2) {
             // Direct code execution
