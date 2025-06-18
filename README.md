@@ -166,5 +166,3 @@ Inspired by:
 * Chuck Moore's original Forth philosophy
 * The Groovy community
 
-Developed with ❤️ by [Geoffrey P.](#)
-
